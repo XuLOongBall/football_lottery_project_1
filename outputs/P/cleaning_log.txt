@@ -1,0 +1,7 @@
+raw rows: 74305
+drop invalid date: 0 (remain 74305)
+drop invalid total_goals: 649 (remain 73656)
+cap total_goals>=7 to 7: 1673
+drop total_goals < 0: 0 (remain 73656)
+drop invalid odds (non-numeric or <=0): 0 (remain 73656)
+final usable rows: 73656

@@ -1,0 +1,19 @@
+=== Scheme A: EV ===
+total_bets: 1868
+hit_rate: 0.2414
+max_losing_streak: 8
+betting_days: 1268
+natural_days: 3620
+final_profit: -2173060.0
+final_bankroll: -2173060.0
+stoploss_triggers: 48
+
+=== Scheme B: P ===
+total_bets: 1868
+hit_rate: 0.4839
+max_losing_streak: 8
+betting_days: 228
+natural_days: 3592
+final_profit: -513615.0
+final_bankroll: -513615.0
+stoploss_triggers: 5
