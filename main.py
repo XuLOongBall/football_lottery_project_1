@@ -13,6 +13,30 @@ from metrics import compute_metrics
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
+def _write_kv(f, label: str, value):
+    """写一条指标到文本文件：支持多行排版。"""
+    if value is None:
+        f.write(f"{label}: None\n")
+        return
+
+    # dict：逐行展开
+    if isinstance(value, dict):
+        f.write(f"{label}:\n")
+        for k in sorted(value.keys()):
+            f.write(f"  {k}: {value[k]}\n")
+        return
+
+    s = str(value)
+    if "\n" in s:
+        # 如果 value 本身以换行开头，直接接在冒号后面更好看
+        if s.startswith("\n"):
+            f.write(f"{label}:{s}\n")
+        else:
+            f.write(f"{label}:\n{s}\n")
+    else:
+        f.write(f"{label}: {s}\n")
+
+
 
 def export_best_scheme_to_root(best_scheme: str):
     """
@@ -69,6 +93,7 @@ METRIC_LABEL_CN = {
     "total_bets": "总下注次数",
     "hit_rate": "命中率",
     "max_losing_streak": "最大连续未命中次数",
+    "losing_streak_distribution": "连续未命中段统计（长度→段数）",
     "betting_days": "实际下注天数",
     "natural_days": "覆盖自然天数",
     "final_profit": "最终总收益",
@@ -136,7 +161,7 @@ def write_summary_cn(summary: dict, out_dir: str, scheme: str):
         f.write("-" * 30 + "\n")
         for k, v in summary.items():
             label = METRIC_LABEL_CN.get(k, k)
-            f.write(f"{label}: {v}\n")
+            _write_kv(f, label, v)
 
 
 def run_one_scheme(df_clean: pd.DataFrame, scheme: str):
@@ -194,7 +219,7 @@ def run_one_scheme(df_clean: pd.DataFrame, scheme: str):
     write_summary_cn(summary, out_dir=out_dir, scheme=scheme)
     with open(os.path.join(out_dir, "summary_en.txt"), "w", encoding="utf-8") as f:
         for k, v in summary.items():
-            f.write(f"{k}: {v}\n")
+            _write_kv(f, k, v)
 
     # 画图（plotting.py 我们也会改成中文标题/坐标）
     plot_equity_curve(df_results, output_dir=out_dir)
@@ -227,11 +252,11 @@ def main():
     with open(compare_path, "w", encoding="utf-8") as f:
         f.write("=== 方案A（EV） ===\n")
         for k, v in summary_ev.items():
-            f.write(f"{METRIC_LABEL_CN.get(k, k)}: {v}\n")
+            _write_kv(f, METRIC_LABEL_CN.get(k, k), v)
 
         f.write("\n=== 方案B（P） ===\n")
         for k, v in summary_p.items():
-            f.write(f"{METRIC_LABEL_CN.get(k, k)}: {v}\n")
+            _write_kv(f, METRIC_LABEL_CN.get(k, k), v)
 
 
     # 8. 选“更优秀”的方案：先看实际最终收益；相同则看最大回撤；再看止损次数；再看最大连续未命中
