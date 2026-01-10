@@ -94,6 +94,7 @@ def plot_drawdown_curve(df_results: pd.DataFrame, output_dir: str):
 def plot_monthly_stats(df_results: pd.DataFrame, output_dir: str):
     """
     月度下注次数 & 月度命中率（分成两张图，更清晰）
+    - 改进：自动“抽稀”横轴刻度（最多显示约 12 个），避免月份太多挤成一坨
     """
     if df_results.empty:
         return
@@ -107,15 +108,24 @@ def plot_monthly_stats(df_results: pd.DataFrame, output_dir: str):
         hit_rate=("hit", "mean"),
     ).reset_index()
 
+    labels = grp["month_id"].astype(str).tolist()
+    x = np.arange(len(labels))
+
+    # 横轴最多显示 ~12 个刻度（月份多时自动抽稀）
+    max_ticks = 12
+    step = max(1, int(np.ceil(len(labels) / max_ticks)))
+    tick_idx = x[::step]
+    tick_labels = [labels[i] for i in tick_idx]
+
     os.makedirs(output_dir, exist_ok=True)
 
     # 1) 月度下注次数
-    plt.figure()
-    plt.plot(grp["month_id"].astype(str), grp["bets"].astype(int))
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, grp["bets"].astype(int).values)
     plt.title("月度下注次数")
     plt.xlabel("月份")
     plt.ylabel("下注次数")
-    plt.xticks(rotation=60)
+    plt.xticks(tick_idx, tick_labels, rotation=45, ha="right")
     plt.tight_layout()
     p_en = os.path.join(output_dir, "monthly_bets.png")
     p_cn = os.path.join(output_dir, "月度下注次数.png")
@@ -123,12 +133,12 @@ def plot_monthly_stats(df_results: pd.DataFrame, output_dir: str):
     plt.close()
 
     # 2) 月度命中率
-    plt.figure()
-    plt.plot(grp["month_id"].astype(str), grp["hit_rate"].astype(float))
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, grp["hit_rate"].astype(float).values)
     plt.title("月度命中率")
     plt.xlabel("月份")
     plt.ylabel("命中率")
-    plt.xticks(rotation=60)
+    plt.xticks(tick_idx, tick_labels, rotation=45, ha="right")
     plt.tight_layout()
     p_en = os.path.join(output_dir, "monthly_hit_rate.png")
     p_cn = os.path.join(output_dir, "月度命中率.png")
