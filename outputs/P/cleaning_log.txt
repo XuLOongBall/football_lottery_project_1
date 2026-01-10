@@ -4,4 +4,6 @@ drop invalid total_goals: 649 (remain 73656)
 cap total_goals>=7 to 7: 1673
 drop total_goals < 0: 0 (remain 73656)
 drop invalid odds (non-numeric or <=0): 0 (remain 73656)
+teams parsed from column: 主客场
+teams sample: ['西悉尼', '邓迪联', '斯托克城'] vs ['中央海岸', '邓迪FC', '曼联']
 final usable rows: 73656

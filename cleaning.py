@@ -13,6 +13,9 @@ def clean_data(df_raw: pd.DataFrame):
     log = []
     df = df_raw.copy()
 
+    # 清理列名：去掉首尾空格/隐藏 BOM，避免“看起来一样但匹配不到”
+    df.columns = df.columns.astype(str).map(lambda x: x.replace("\ufeff", "").strip())
+
     log.append(f"raw rows: {len(df)}")
 
     # 1. 比赛时间
@@ -75,9 +78,45 @@ def clean_data(df_raw: pd.DataFrame):
     odds_list_valid = [od for od, ok in zip(odds_list, valid_mask) if ok]
     df["odds"] = odds_list_valid
 
-    # 4. 主客队（占位，不影响策略）
-    df["home_team"] = "HOME"
-    df["away_team"] = "AWAY"
+    # 4. 主客队（优先从原始列提取；否则从“主客场/对阵”列解析；最后才占位）
+    home_candidates = ["主队", "主队名称", "主队名", "主队简称", "HomeTeam", "home_team"]
+    away_candidates = ["客队", "客队名称", "客队名", "客队简称", "AwayTeam", "away_team"]
+
+    def _first_existing(cands):
+        for c in cands:
+            if c in df.columns:
+                return c
+        return None
+
+    home_col = _first_existing(home_candidates)
+    away_col = _first_existing(away_candidates)
+
+    if home_col and away_col:
+        df["home_team"] = df[home_col].astype(str).str.strip()
+        df["away_team"] = df[away_col].astype(str).str.strip()
+        log.append(f"teams from columns: home={home_col}, away={away_col}")
+    else:
+        # 你这份数据里“主客场”列形如 “A VS B” ：A=主队，B=客队
+        vs_candidates = ["主客场", "对阵", "比赛", "赛事", "match", "Match", "VS", "vs"]
+        vs_col = _first_existing(vs_candidates)
+
+        if vs_col:
+            s = df[vs_col].astype(str)
+            # 兼容各种分隔符：VS / vs / - / — / ：等
+            parts = s.str.split(r"\s*(?:vs|VS|－|-|—|–|:|：)\s*", n=1, expand=True)
+            if parts.shape[1] >= 2:
+                df["home_team"] = parts[0].fillna("").str.strip()
+                df["away_team"] = parts[1].fillna("").str.strip()
+                log.append(f"teams parsed from column: {vs_col}")
+                log.append(f"teams sample: {df['home_team'].head(3).tolist()} vs {df['away_team'].head(3).tolist()}")
+            else:
+                df["home_team"] = "HOME"
+                df["away_team"] = "AWAY"
+                log.append(f"teams placeholder: failed to parse '{vs_col}'")
+        else:
+            df["home_team"] = "HOME"
+            df["away_team"] = "AWAY"
+            log.append("teams placeholder: no team columns found")
 
     # 5. 月份标识
     df["month_id"] = df["date"].dt.strftime("%Y-%m")
