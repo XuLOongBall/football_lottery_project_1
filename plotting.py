@@ -103,9 +103,14 @@ def plot_monthly_stats(df_results: pd.DataFrame, output_dir: str):
     if "month_id" not in df.columns:
         return
 
+    # hit 允许 NaN（例如 void 退票），NaN 不计入命中率/连错段
+    df["hit_num"] = pd.to_numeric(df.get("hit"), errors="coerce")
+    df["decided"] = df["hit_num"].notna().astype(int)
+
     grp = df.groupby("month_id", sort=True).agg(
-        bets=("hit", "size"),
-        hit_rate=("hit", "mean"),
+        bets=("decided", "size"),          # 含 void 的总下注笔数
+        decided_bets=("decided", "sum"),   # 已结算笔数（不含 void）
+        hit_rate=("hit_num", "mean"),      # 仅在 decided 上计算（pandas mean 默认忽略 NaN）
     ).reset_index()
 
     labels = grp["month_id"].astype(str).tolist()

@@ -140,14 +140,50 @@ def to_chinese_results(df_results: pd.DataFrame) -> pd.DataFrame:
     # 值层面的中文化（更好读）
     if "scheme" in df.columns:
         df["scheme"] = df["scheme"].map(lambda s: SCHEME_NAME_CN.get(s, s))
+
     if "selected_set" in df.columns:
         df["selected_set"] = df["selected_set"].map(_format_selected_set)
+
+    # 命中/止损/EV回退：需要兼容 NaN（退票/无效场次）和已中文化的字符串
+    def _hit_cn(v):
+        if pd.isna(v):
+            return "退票"
+        if isinstance(v, str):
+            s = v.strip()
+            if s in ("命中", "未命中", "退票"):
+                return s
+            # 兼容 "1"/"0"/"1.0"/"0.0"
+            try:
+                return "命中" if int(float(s)) == 1 else "未命中"
+            except Exception:
+                return s
+        try:
+            return "命中" if int(v) == 1 else "未命中"
+        except Exception:
+            return "退票"
+
+    def _yn_cn(v):
+        if pd.isna(v):
+            return "—"
+        if isinstance(v, str):
+            s = v.strip()
+            if s in ("是", "否", "—"):
+                return s
+            try:
+                return "是" if int(float(s)) == 1 else "否"
+            except Exception:
+                return s
+        try:
+            return "是" if int(v) == 1 else "否"
+        except Exception:
+            return "—"
+
     if "hit" in df.columns:
-        df["hit"] = df["hit"].map(lambda v: "命中" if int(v) == 1 else "未命中")
+        df["hit"] = df["hit"].map(_hit_cn)
     if "stoploss" in df.columns:
-        df["stoploss"] = df["stoploss"].map(lambda v: "是" if int(v) == 1 else "否")
+        df["stoploss"] = df["stoploss"].map(_yn_cn)
     if "ev_fallback" in df.columns:
-        df["ev_fallback"] = df["ev_fallback"].map(lambda v: "是" if int(v) == 1 else "否")
+        df["ev_fallback"] = df["ev_fallback"].map(_yn_cn)
 
     # 列名中文化
     df = df.rename(columns=RESULT_COL_CN)

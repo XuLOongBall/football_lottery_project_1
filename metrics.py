@@ -10,11 +10,14 @@ def _format_losing_streak_distribution(counts: dict) -> str:
         lines.append(f"  连续{k}次未命中：{counts[k]} 段")
     return "\n" + "\n".join(lines)
 
+
 def compute_metrics(df: pd.DataFrame) -> dict:
     """计算回测结果的核心指标（用于 summary.txt / compare.txt）。"""
     if df is None or len(df) == 0:
         return {
             "total_bets": 0,
+            "decided_bets": 0,
+            "void_bets": 0,
             "hit_rate": 0.0,
             "max_losing_streak": 0,
             "losing_streak_distribution": "\n  无",
@@ -25,18 +28,36 @@ def compute_metrics(df: pd.DataFrame) -> dict:
             "stoploss_triggers": 0,
         }
 
-    # 命中/下注
-    n_bets = int(len(df))
-    n_hits = int(pd.to_numeric(df["hit"], errors="coerce").fillna(0).astype(int).sum())
-    hit_rate = n_hits / n_bets if n_bets else 0.0
+    df = df.copy()
 
-    # 止损次数
+    # 兼容：没有 is_void 列则全部视为 played
+    is_void = pd.to_numeric(df.get("is_void", 0), errors="coerce").fillna(0).astype(int)
+    df["__is_void__"] = is_void
+
+    n_bets = int(len(df))
+    void_bets = int((df["__is_void__"] == 1).sum())
+
+    # decided = 有结算结果的比赛：hit 不是 NaN
+    hit_series = pd.to_numeric(df.get("hit"), errors="coerce")
+    decided_mask = hit_series.notna()
+    df_decided = df[decided_mask].copy()
+    n_decided = int(len(df_decided))
+
+    # 命中率：只用 decided 做分母（void 不计入命中率/连错段）
+    if n_decided == 0:
+        n_hits = 0
+        hit_rate = 0.0
+    else:
+        n_hits = int(pd.to_numeric(df_decided["hit"], errors="coerce").fillna(0).astype(int).sum())
+        hit_rate = n_hits / n_decided
+
+    # 止损次数（void 通常为0）
     stoploss_series = pd.to_numeric(df.get("stoploss", 0), errors="coerce").fillna(0).astype(int)
     stoploss_triggers = int(stoploss_series.sum())
 
-    # 连续未命中段统计（按策略轮次：命中或止损会结束一段）
-    hits = pd.to_numeric(df["hit"], errors="coerce").fillna(0).astype(int).tolist()
-    stoplosses = stoploss_series.tolist()
+    # 连续未命中段统计（只在 decided 内统计；void 跳过，不算未命中）
+    hits = pd.to_numeric(df_decided["hit"], errors="coerce").fillna(0).astype(int).tolist()
+    stoplosses = pd.to_numeric(df_decided.get("stoploss", 0), errors="coerce").fillna(0).astype(int).tolist()
 
     counts = {}  # {连续未命中长度: 段数}
     cur = 0
@@ -63,11 +84,11 @@ def compute_metrics(df: pd.DataFrame) -> dict:
     losing_streak_distribution = _format_losing_streak_distribution(counts)
 
     # 收益
-    total_profit = float(pd.to_numeric(df["profit"], errors="coerce").fillna(0).sum())
-    final_bankroll = float(pd.to_numeric(df["bankroll"], errors="coerce").iloc[-1])
+    total_profit = float(pd.to_numeric(df.get("profit", 0), errors="coerce").fillna(0).sum())
+    final_bankroll = float(pd.to_numeric(df.get("bankroll", 0), errors="coerce").iloc[-1])
 
     # 时间维度（尽量兼容 date 为字符串的情况）
-    date_series = pd.to_datetime(df["date"], errors="coerce")
+    date_series = pd.to_datetime(df.get("date"), errors="coerce")
     betting_days = int(date_series.nunique())
     if betting_days == 0:
         natural_days = 0
@@ -76,6 +97,8 @@ def compute_metrics(df: pd.DataFrame) -> dict:
 
     return {
         "total_bets": n_bets,
+        "decided_bets": n_decided,
+        "void_bets": void_bets,
         "hit_rate": round(hit_rate, 4),
         "max_losing_streak": int(max_losing_streak),
         "losing_streak_distribution": losing_streak_distribution,
